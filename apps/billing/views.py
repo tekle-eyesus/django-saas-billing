@@ -1,12 +1,18 @@
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from apps.subscriptions.models import SubscriptionPlan
+from .services import ChapaService
+import hmac
+import hashlib
+from datetime import timedelta
+from django.utils import timezone
+from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from django.shortcuts import get_object_or_404
-
-from apps.subscriptions.models import SubscriptionPlan
+from apps.subscriptions.models import Subscription
 from .models import Transaction
-from .services import ChapaService
+
 
 class InitializePaymentView(APIView):
     permission_classes = [IsAuthenticated]
@@ -53,3 +59,71 @@ class InitializePaymentView(APIView):
             }, status=status.HTTP_200_OK)
         else:
             return Response({"error": "Failed to initialize payment"}, status=500)
+        
+
+class ChapaWebhookView(APIView):
+    """
+    Receives payment confirmation from Chapa and updates subscription.
+    """
+    authentication_classes = [] # Webhooks are public endpoints
+    permission_classes = []
+
+    def post(self, request):
+        signature = request.headers.get('x-chapa-signature')
+        secret = settings.CHAPA_WEBHOOK_SECRET
+        
+        if secret and signature:
+            # Hash the request body using your secret
+            expected_signature = hmac.new(
+                secret.encode('utf-8'), 
+                request.body, 
+                hashlib.sha256
+            ).hexdigest()
+            
+            if expected_signature != signature:
+                return Response({"error": "Invalid Signature"}, status=status.HTTP_403_FORBIDDEN)
+
+     
+        data = request.data
+        tx_ref = data.get('tx_ref') or data.get('data', {}).get('tx_ref')
+        
+        if not tx_ref:
+            return Response({"error": "tx_ref missing"}, status=400)
+
+     
+        try:
+            transaction = Transaction.objects.get(tx_ref=tx_ref)
+        except Transaction.DoesNotExist:
+            return Response({"error": "Transaction not found"}, status=404)
+
+       
+        if transaction.status == 'SUCCESS':
+            return Response({"message": "Already processed"}, status=200)
+
+        # Mark Transaction as SUCCESS
+        transaction.status = 'SUCCESS'
+        transaction.chapa_ref = data.get('reference', '') 
+        transaction.save()
+
+        organization = transaction.organization
+        plan = transaction.plan
+        
+        new_end_date = timezone.now() + timedelta(days=30)
+
+        subscription, created = Subscription.objects.get_or_create(
+            organization=organization,
+            defaults={
+                'plan': plan,
+                'end_date': new_end_date,
+                'status': 'ACTIVE'
+            }
+        )
+
+        if not created:
+            # If they already had a sub, upgrade/renew it
+            subscription.plan = plan
+            subscription.status = 'ACTIVE'
+            subscription.end_date = new_end_date
+            subscription.save()
+
+        return Response({"status": "success"}, status=200)
