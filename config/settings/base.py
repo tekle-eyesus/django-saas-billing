@@ -83,3 +83,7 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+
+# Chapa Settings
+CHAPA_SECRET_KEY = os.getenv('CHAPA_SECRET_KEY')
+CHAPA_WEBHOOK_SECRET = os.getenv('CHAPA_WEBHOOK_SECRET')
