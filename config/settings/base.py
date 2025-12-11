@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'drf_spectacular',
 
     # Local Apps
     'apps.users',
@@ -67,6 +68,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # JWT Settings
@@ -94,4 +96,13 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'unique-snowflake',
     }
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Nexus SaaS API',
+    'DESCRIPTION': 'API for SaaS Subscription Management with Chapa Billing',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # This helps Auth appear in the Swagger UI
+    'COMPONENT_SPLIT_REQUEST': True,
 }
