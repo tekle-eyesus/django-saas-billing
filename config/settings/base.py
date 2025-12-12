@@ -91,12 +91,25 @@ CHAPA_SECRET_KEY = os.getenv('CHAPA_SECRET_KEY')
 CHAPA_WEBHOOK_SECRET = os.getenv('CHAPA_WEBHOOK_SECRET')
 
 # Caching (Used for Throttling)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
+# Simple check to see if we want to force redis or use local
+if os.getenv('DB_HOST'): # Assuming if DB is docker, Redis is too
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': f'redis://{REDIS_HOST}:6379/1',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Nexus SaaS API',
